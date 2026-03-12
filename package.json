@@ -1,0 +1,12 @@
+{
+  "name": "trakN",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Majd-Alhakim/trakN.git",
+  "author": "Majd-Alhakim <majdjehadalhakim@gmail.com>",
+  "license": "MIT",
+
+  "scripts": {
+    "start": "node index.js"
+  }
+}
