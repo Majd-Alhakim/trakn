@@ -5,8 +5,11 @@
   "repository": "https://github.com/Majd-Alhakim/trakN.git",
   "author": "Majd-Alhakim <majdjehadalhakim@gmail.com>",
   "license": "MIT",
-
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "release": "standard-version"
+  },
+  "devDependencies": {
+    "standard-version": "^9.5.0"
   }
 }
