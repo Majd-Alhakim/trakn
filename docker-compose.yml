@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://trakn:${DB_PASSWORD}@db:5432/trakndb
+      - JWT_SECRET=${JWT_SECRET}
+      - DEVICE_API_KEY_SALT=${DEVICE_API_KEY_SALT}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
+    environment:
+      - POSTGRES_DB=trakndb
+      - POSTGRES_USER=trakn
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    restart: unless-stopped
+
+volumes:
+  pgdata:

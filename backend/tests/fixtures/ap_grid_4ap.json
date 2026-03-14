@@ -1,0 +1,81 @@
+{
+  "description": "4 APs at corners of a 20m x 20m room + uniform walkable grid",
+  "room_width_m": 20.0,
+  "room_height_m": 20.0,
+  "grid_spacing_m": 1.0,
+  "access_points": [
+    {
+      "bssid":       "AA:BB:CC:DD:EE:01",
+      "ssid":        "TRAKN_AP_1",
+      "x":           0.0,
+      "y":           0.0,
+      "rssi_ref":    -40.0,
+      "path_loss_n": 2.0,
+      "freq_mhz":    2412,
+      "rtt_offset_m": 0.0
+    },
+    {
+      "bssid":       "AA:BB:CC:DD:EE:02",
+      "ssid":        "TRAKN_AP_2",
+      "x":           20.0,
+      "y":           0.0,
+      "rssi_ref":    -40.0,
+      "path_loss_n": 2.0,
+      "freq_mhz":    2412,
+      "rtt_offset_m": 0.0
+    },
+    {
+      "bssid":       "AA:BB:CC:DD:EE:03",
+      "ssid":        "TRAKN_AP_3",
+      "x":           0.0,
+      "y":           20.0,
+      "rssi_ref":    -40.0,
+      "path_loss_n": 2.0,
+      "freq_mhz":    2412,
+      "rtt_offset_m": 0.0
+    },
+    {
+      "bssid":       "AA:BB:CC:DD:EE:04",
+      "ssid":        "TRAKN_AP_4",
+      "x":           20.0,
+      "y":           20.0,
+      "rssi_ref":    -40.0,
+      "path_loss_n": 2.0,
+      "freq_mhz":    2412,
+      "rtt_offset_m": 0.0
+    }
+  ],
+  "grid_points": [
+    {"id": "gp_5_5",   "x": 5.0,  "y": 5.0,  "is_walkable": true},
+    {"id": "gp_10_10", "x": 10.0, "y": 10.0, "is_walkable": true},
+    {"id": "gp_15_15", "x": 15.0, "y": 15.0, "is_walkable": true},
+    {"id": "gp_5_15",  "x": 5.0,  "y": 15.0, "is_walkable": true},
+    {"id": "gp_15_5",  "x": 15.0, "y": 5.0,  "is_walkable": true},
+    {"id": "gp_0_0",   "x": 0.0,  "y": 0.0,  "is_walkable": false},
+    {"id": "gp_20_20", "x": 20.0, "y": 20.0, "is_walkable": false}
+  ],
+  "test_scenarios": [
+    {
+      "name": "centre_of_room",
+      "true_position": {"x": 10.0, "y": 10.0},
+      "wifi_observations": [
+        {"bssid": "AA:BB:CC:DD:EE:01", "rssi": -54},
+        {"bssid": "AA:BB:CC:DD:EE:02", "rssi": -54},
+        {"bssid": "AA:BB:CC:DD:EE:03", "rssi": -54},
+        {"bssid": "AA:BB:CC:DD:EE:04", "rssi": -54}
+      ],
+      "tolerance_m": 3.0
+    },
+    {
+      "name": "near_ap1",
+      "true_position": {"x": 2.0, "y": 2.0},
+      "wifi_observations": [
+        {"bssid": "AA:BB:CC:DD:EE:01", "rssi": -43},
+        {"bssid": "AA:BB:CC:DD:EE:02", "rssi": -67},
+        {"bssid": "AA:BB:CC:DD:EE:03", "rssi": -67},
+        {"bssid": "AA:BB:CC:DD:EE:04", "rssi": -74}
+      ],
+      "tolerance_m": 4.0
+    }
+  ]
+}

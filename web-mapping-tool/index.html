@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRAKN — Web Mapping Tool</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+    header { background: #1a1d27; padding: 12px 20px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #2d3148; }
+    header h1 { font-size: 1.2rem; color: #7c9cff; }
+    #tabs { display: flex; gap: 4px; }
+    .tab-btn {
+      padding: 6px 14px; border: 1px solid #2d3148; background: #1a1d27;
+      color: #8898aa; border-radius: 6px; cursor: pointer; font-size: 0.82rem; transition: all 0.15s;
+    }
+    .tab-btn.active { background: #2a3060; color: #e0e6ff; border-color: #4a5aaa; }
+    #main { display: flex; flex: 1; overflow: hidden; }
+    #sidebar {
+      width: 280px; background: #1a1d27; border-right: 1px solid #2d3148;
+      padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    }
+    #canvas-area { flex: 1; position: relative; overflow: hidden; }
+    canvas { display: block; }
+    .panel { background: #23263a; border-radius: 8px; padding: 12px; }
+    .panel h3 { font-size: 0.85rem; color: #aab4cc; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    label { font-size: 0.8rem; color: #8898aa; display: block; margin-bottom: 4px; }
+    input[type="text"], input[type="number"], input[type="file"], select {
+      width: 100%; padding: 6px 8px; background: #0f1117; border: 1px solid #2d3148;
+      border-radius: 4px; color: #e0e0e0; font-size: 0.82rem; margin-bottom: 8px;
+    }
+    button {
+      width: 100%; padding: 8px; border: none; border-radius: 6px;
+      background: #3a4aaa; color: #fff; font-size: 0.82rem; cursor: pointer; transition: background 0.15s;
+    }
+    button:hover { background: #4a5adc; }
+    button.danger { background: #aa3a3a; }
+    button.danger:hover { background: #cc4a4a; }
+    button.success { background: #2a8a4a; }
+    button.success:hover { background: #3aaa5a; }
+    .tool-btn {
+      padding: 6px 10px; background: #23263a; border: 1px solid #2d3148; border-radius: 4px;
+      color: #8898aa; cursor: pointer; font-size: 0.78rem; flex: 1;
+    }
+    .tool-btn.active { background: #2a3060; color: #e0e6ff; border-color: #4a5aaa; }
+    .tool-row { display: flex; gap: 6px; margin-bottom: 8px; }
+    .status-bar {
+      background: #1a1d27; border-top: 1px solid #2d3148; padding: 4px 16px;
+      font-size: 0.75rem; color: #6677aa;
+    }
+    .heatmap-legend {
+      height: 16px; background: linear-gradient(to right, #00f, #0ff, #0f0, #ff0, #f00);
+      border-radius: 4px; margin-top: 4px;
+    }
+    .legend-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: #6677aa; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    #toast {
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+      background: #2a3060; color: #e0e6ff; padding: 10px 20px; border-radius: 8px;
+      font-size: 0.85rem; display: none; border: 1px solid #4a5aaa; z-index: 9999;
+    }
+    #auth-panel { padding: 20px; max-width: 320px; }
+    #auth-panel input { margin-bottom: 10px; }
+    .scale-info { font-size: 0.75rem; color: #6677aa; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>TRAKN Mapping Tool</h1>
+  <div id="tabs">
+    <button class="tab-btn active" onclick="switchTab('upload')">Upload</button>
+    <button class="tab-btn" onclick="switchTab('scale')">Scale</button>
+    <button class="tab-btn" onclick="switchTab('walls')">Walls</button>
+    <button class="tab-btn" onclick="switchTab('grid')">Grid</button>
+    <button class="tab-btn" onclick="switchTab('calibrate')">Calibrate</button>
+    <button class="tab-btn" onclick="switchTab('heatmap')">Heatmap</button>
+    <button class="tab-btn" onclick="switchTab('auth')">Auth</button>
+  </div>
+</header>
+
+<div id="main">
+  <div id="sidebar">
+
+    <!-- ================== UPLOAD PANEL ================== -->
+    <div class="panel tab-panel active" id="panel-upload">
+      <h3>Floor Plan</h3>
+      <label>Upload PNG / SVG / PDF</label>
+      <input type="file" id="floorplan-file" accept=".png,.jpg,.svg,.pdf">
+      <button onclick="loadFloorPlan()">Load Plan</button>
+      <div style="margin-top:8px;">
+        <label>Venue Name</label>
+        <input type="text" id="venue-name" placeholder="e.g. Mall of Qatar">
+        <button class="success" onclick="createVenue()">Create Venue</button>
+      </div>
+      <div id="venue-status" class="scale-info"></div>
+    </div>
+
+    <!-- ================== SCALE PANEL ================== -->
+    <div class="panel tab-panel" id="panel-scale">
+      <h3>Set Scale</h3>
+      <p style="font-size:0.78rem; color:#6677aa; margin-bottom:8px;">
+        Click two points on the canvas, then enter the real-world distance between them.
+      </p>
+      <label>Real-world distance (metres)</label>
+      <input type="number" id="scale-distance" placeholder="e.g. 5.0" min="0.1" step="0.1">
+      <button onclick="applyScale()">Apply Scale</button>
+      <div class="scale-info" id="scale-info">Scale: not set</div>
+    </div>
+
+    <!-- ================== WALLS PANEL ================== -->
+    <div class="panel tab-panel" id="panel-walls">
+      <h3>Walls</h3>
+      <div class="tool-row">
+        <button class="tool-btn active" id="btn-wall-draw" onclick="setWallTool('draw')">Draw</button>
+        <button class="tool-btn" id="btn-wall-erase" onclick="setWallTool('erase')">Erase</button>
+        <button class="tool-btn" id="btn-wall-move" onclick="setWallTool('pan')">Pan</button>
+      </div>
+      <button class="danger" onclick="clearWalls()">Clear All Walls</button>
+      <div class="scale-info" id="wall-count">Walls: 0</div>
+    </div>
+
+    <!-- ================== GRID PANEL ================== -->
+    <div class="panel tab-panel" id="panel-grid">
+      <h3>Grid Generation</h3>
+      <label>Grid spacing (metres)</label>
+      <input type="number" id="grid-spacing" value="0.5" min="0.1" max="5.0" step="0.1">
+      <button onclick="generateGrid()">Generate Grid</button>
+      <div class="scale-info" id="grid-info">Grid points: 0</div>
+      <div style="margin-top:8px;">
+        <button class="success" onclick="exportGridToAPI()">Export to API</button>
+      </div>
+      <div id="grid-export-status" class="scale-info"></div>
+    </div>
+
+    <!-- ================== CALIBRATE PANEL ================== -->
+    <div class="panel tab-panel" id="panel-calibrate">
+      <h3>Path Loss Calibration</h3>
+      <p style="font-size:0.78rem; color:#6677aa; margin-bottom:8px;">
+        Upload a CSV with columns: bssid, rssi, distance_m
+      </p>
+      <input type="file" id="rssi-csv" accept=".csv">
+      <button onclick="calibratePathLoss()">Fit Path Loss (n)</button>
+      <div id="calib-results" style="margin-top:8px; font-size:0.78rem; color:#aabbc0;"></div>
+      <div style="margin-top:8px;">
+        <button class="success" onclick="pushAPsToAPI()">Push APs to API</button>
+      </div>
+      <div id="ap-push-status" class="scale-info"></div>
+    </div>
+
+    <!-- ================== HEATMAP PANEL ================== -->
+    <div class="panel tab-panel" id="panel-heatmap">
+      <h3>Radio Map Preview</h3>
+      <label>Select AP (BSSID)</label>
+      <select id="heatmap-ap-select">
+        <option value="">-- Select AP --</option>
+      </select>
+      <button onclick="renderHeatmap()">Show Heatmap</button>
+      <div class="heatmap-legend"></div>
+      <div class="legend-labels"><span>Far</span><span>Close</span></div>
+    </div>
+
+    <!-- ================== AUTH PANEL ================== -->
+    <div class="panel tab-panel" id="panel-auth" id="auth-panel">
+      <h3>Authentication</h3>
+      <label>Email</label>
+      <input type="text" id="auth-email" placeholder="user@example.com">
+      <label>Password</label>
+      <input type="text" id="auth-password" placeholder="password" style="margin-bottom:8px;">
+      <button onclick="doLogin()">Login</button>
+      <button onclick="doRegister()" style="margin-top:6px; background:#2a5a3a;">Register</button>
+      <div id="auth-status" class="scale-info" style="margin-top:8px;"></div>
+    </div>
+
+  </div>
+
+  <div id="canvas-area">
+    <canvas id="main-canvas"></canvas>
+  </div>
+</div>
+
+<div class="status-bar" id="status-bar">
+  Ready. Load a floor plan to begin.
+</div>
+
+<div id="toast"></div>
+
+<script>
+// =============================================================================
+// TRAKN Web Mapping Tool — index.html (single-file)
+// Uses Canvas API + Fetch API. No build toolchain.
+// API: https://trakn.duckdns.org/api/v1
+// =============================================================================
+
+const API_BASE = 'https://trakn.duckdns.org/api/v1';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let canvas, ctx;
+let floorplanImg     = null;
+let floorplanScale   = 1.0;     // pixels per metre
+let scaleCalibrated  = false;
+let scalePoints      = [];      // up to 2 canvas points for scale setting
+let walls            = [];      // [{x1,y1,x2,y2}] in canvas pixels
+let gridPoints       = [];      // [{x,y,walkable}] in metres
+let heatmapData      = null;
+let apData           = {};      // bssid → {n, rssi_ref, x, y, ...}
+let currentTool      = 'draw';  // 'draw'|'erase'|'pan'|'scale-pick'
+let activeTab        = 'upload';
+let wallInProgress   = null;    // {x1,y1}
+let panStart         = null;
+let panOffset        = { x: 0, y: 0 };
+let venueId          = null;
+let authToken        = localStorage.getItem('trakn_token') || '';
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+window.addEventListener('DOMContentLoaded', () => {
+  canvas = document.getElementById('main-canvas');
+  ctx    = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  canvas.addEventListener('mousedown',  onMouseDown);
+  canvas.addEventListener('mousemove',  onMouseMove);
+  canvas.addEventListener('mouseup',    onMouseUp);
+  canvas.addEventListener('mouseleave', onMouseUp);
+
+  render();
+  if (authToken) setStatus('Logged in (token from storage).');
+});
+
+function resizeCanvas() {
+  const area  = document.getElementById('canvas-area');
+  canvas.width  = area.clientWidth;
+  canvas.height = area.clientHeight;
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Tab switching
+// ---------------------------------------------------------------------------
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    const tabs = ['upload','scale','walls','grid','calibrate','heatmap','auth'];
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + tab);
+  });
+  if (tab === 'scale') currentTool = 'scale-pick';
+  else if (tab === 'walls') currentTool = 'draw';
+  else currentTool = 'pan';
+}
+
+// ---------------------------------------------------------------------------
+// Floor plan loading
+// ---------------------------------------------------------------------------
+function loadFloorPlan() {
+  const file = document.getElementById('floorplan-file').files[0];
+  if (!file) { toast('No file selected.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      floorplanImg   = img;
+      panOffset      = { x: 0, y: 0 };
+      floorplanScale = canvas.width / img.width;
+      render();
+      setStatus('Floor plan loaded: ' + file.name);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ---------------------------------------------------------------------------
+// Venue creation
+// ---------------------------------------------------------------------------
+async function createVenue() {
+  const name = document.getElementById('venue-name').value.trim();
+  if (!name) { toast('Enter venue name.'); return; }
+  try {
+    const res = await apiFetch('/venue/floor-plan', 'POST', { name });
+    venueId = res.venue_id;
+    document.getElementById('venue-status').textContent = 'Venue created: ' + venueId;
+    toast('Venue created!');
+  } catch(e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scale
+// ---------------------------------------------------------------------------
+function applyScale() {
+  if (scalePoints.length < 2) { toast('Click 2 points on the canvas first.'); return; }
+  const dist = parseFloat(document.getElementById('scale-distance').value);
+  if (!dist || dist <= 0) { toast('Enter a valid distance.'); return; }
+
+  const dx     = scalePoints[1].x - scalePoints[0].x;
+  const dy     = scalePoints[1].y - scalePoints[0].y;
+  const pixels = Math.sqrt(dx*dx + dy*dy);
+
+  floorplanScale  = pixels / dist;  // px/m
+  scaleCalibrated = true;
+  scalePoints     = [];
+
+  document.getElementById('scale-info').textContent =
+    `Scale: ${floorplanScale.toFixed(1)} px/m (${dist.toFixed(2)} m measured)`;
+  toast('Scale applied!');
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Wall tools
+// ---------------------------------------------------------------------------
+function setWallTool(tool) {
+  currentTool = tool;
+  document.getElementById('btn-wall-draw').classList.toggle('active', tool === 'draw');
+  document.getElementById('btn-wall-erase').classList.toggle('active', tool === 'erase');
+  document.getElementById('btn-wall-move').classList.toggle('active', tool === 'pan');
+}
+
+function clearWalls() {
+  walls = [];
+  document.getElementById('wall-count').textContent = 'Walls: 0';
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Grid generation
+// ---------------------------------------------------------------------------
+function generateGrid() {
+  if (!scaleCalibrated) { toast('Set scale first.'); return; }
+  const spacing = parseFloat(document.getElementById('grid-spacing').value) || 0.5;
+  const spacingPx = spacing * floorplanScale;
+
+  gridPoints = [];
+  const w = canvas.width;
+  const h = canvas.height;
+
+  for (let px = 0; px < w; px += spacingPx) {
+    for (let py = 0; py < h; py += spacingPx) {
+      const cx = px + panOffset.x;
+      const cy = py + panOffset.y;
+      const walkable = !isInsideWall(px, py);
+      gridPoints.push({
+        x: (px / floorplanScale),
+        y: (py / floorplanScale),
+        walkable
+      });
+    }
+  }
+
+  document.getElementById('grid-info').textContent = `Grid points: ${gridPoints.length}`;
+  toast(`Generated ${gridPoints.length} grid points.`);
+  render();
+}
+
+function isInsideWall(px, py) {
+  // Check if point is within 3px of any wall segment
+  for (const w of walls) {
+    const d = pointToSegmentDist(px, py, w.x1, w.y1, w.x2, w.y2);
+    if (d < 3) return true;
+  }
+  return false;
+}
+
+function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+  const A  = px - x1, B  = py - y1;
+  const C  = x2 - x1, D  = y2 - y1;
+  const dot = A*C + B*D;
+  const len2 = C*C + D*D;
+  let param = len2 !== 0 ? dot / len2 : -1;
+  param = Math.max(0, Math.min(1, param));
+  const xx = x1 + param*C - px;
+  const yy = y1 + param*D - py;
+  return Math.sqrt(xx*xx + yy*yy);
+}
+
+async function exportGridToAPI() {
+  if (!venueId) { toast('Create a venue first.'); return; }
+  if (gridPoints.length === 0) { toast('Generate grid first.'); return; }
+
+  const payload = gridPoints.map(gp => ({
+    venue_id: venueId, x: gp.x, y: gp.y, is_walkable: gp.walkable
+  }));
+
+  try {
+    const res = await apiFetch('/venue/grid-points', 'POST', payload);
+    document.getElementById('grid-export-status').textContent =
+      `Exported ${res.created} points.`;
+    toast('Grid exported!');
+  } catch(e) {
+    toast('Export error: ' + e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Path loss calibration
+// ---------------------------------------------------------------------------
+async function calibratePathLoss() {
+  const file = document.getElementById('rssi-csv').files[0];
+  if (!file) { toast('Select a CSV file.'); return; }
+
+  const text  = await file.text();
+  const lines = text.trim().split('\n');
+  const data  = {};   // bssid → [{rssi, dist}]
+
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    if (parts.length < 3) continue;
+    const bssid = parts[0].trim().toUpperCase();
+    const rssi  = parseFloat(parts[1]);
+    const dist  = parseFloat(parts[2]);
+    if (!data[bssid]) data[bssid] = [];
+    data[bssid].push({ rssi, dist });
+  }
+
+  const results = [];
+  for (const [bssid, samples] of Object.entries(data)) {
+    if (samples.length < 2) continue;
+
+    // Fit log-distance: RSSI = RSSI_ref - 10*n*log10(d/d0)
+    // => n = (RSSI_ref - RSSI) / (10 * log10(d))
+    // Use least-squares: y = rssi_ref - 10*n*log10(d), fit n and rssi_ref
+    const xs = samples.map(s => Math.log10(Math.max(s.dist, 0.1)));
+    const ys = samples.map(s => s.rssi);
+
+    // Linear regression: ys = a + b * xs  where b = -10*n, a = rssi_ref
+    const n_s     = xs.length;
+    const sum_x   = xs.reduce((a,b) => a+b, 0);
+    const sum_y   = ys.reduce((a,b) => a+b, 0);
+    const sum_xy  = xs.reduce((s,x,i) => s + x*ys[i], 0);
+    const sum_xx  = xs.reduce((s,x) => s + x*x, 0);
+    const denom   = n_s * sum_xx - sum_x * sum_x;
+    const b       = denom !== 0 ? (n_s * sum_xy - sum_x * sum_y) / denom : -20;
+    const a       = (sum_y - b * sum_x) / n_s;
+
+    const path_loss_n = Math.max(1.5, Math.min(6.0, -b / 10.0));
+    const rssi_ref    = Math.max(-80, Math.min(-20, a));
+
+    apData[bssid] = { ...( apData[bssid] || {} ), path_loss_n, rssi_ref };
+    results.push(`${bssid}: n=${path_loss_n.toFixed(2)}, ref=${rssi_ref.toFixed(1)} dBm`);
+    populateHeatmapAPSelect(bssid);
+  }
+
+  document.getElementById('calib-results').innerHTML = results.join('<br>');
+  toast(`Calibrated ${results.length} APs.`);
+}
+
+async function pushAPsToAPI() {
+  if (!venueId) { toast('Create a venue first.'); return; }
+  if (Object.keys(apData).length === 0) { toast('Calibrate APs first.'); return; }
+
+  let pushed = 0;
+  for (const [bssid, ap] of Object.entries(apData)) {
+    try {
+      await apiFetch('/venue/ap', 'POST', {
+        bssid,
+        venue_id: venueId,
+        ssid: ap.ssid || '',
+        x: ap.x || 0,
+        y: ap.y || 0,
+        rssi_ref: ap.rssi_ref || -40.0,
+        path_loss_n: ap.path_loss_n || 2.0,
+        freq_mhz: ap.freq_mhz || 2412,
+        rtt_offset_m: ap.rtt_offset_m || 0.0,
+        oui: ap.oui || null
+      });
+      pushed++;
+    } catch(e) {
+      console.warn('AP push failed for', bssid, e);
+    }
+  }
+  document.getElementById('ap-push-status').textContent = `Pushed ${pushed} APs.`;
+  toast(`Pushed ${pushed} APs to API.`);
+}
+
+// ---------------------------------------------------------------------------
+// Heatmap
+// ---------------------------------------------------------------------------
+function populateHeatmapAPSelect(bssid) {
+  const sel = document.getElementById('heatmap-ap-select');
+  if (![...sel.options].some(o => o.value === bssid)) {
+    const opt = document.createElement('option');
+    opt.value = bssid; opt.textContent = bssid;
+    sel.appendChild(opt);
+  }
+}
+
+function renderHeatmap() {
+  const bssid = document.getElementById('heatmap-ap-select').value;
+  if (!bssid || !apData[bssid]) { toast('Select a calibrated AP.'); return; }
+  const ap = apData[bssid];
+  if (!ap.x && !ap.y) { toast('AP position not set.'); return; }
+
+  heatmapData = { bssid, ap };
+  render();
+  toast('Heatmap rendered.');
+}
+
+// ---------------------------------------------------------------------------
+// Authentication
+// ---------------------------------------------------------------------------
+async function doLogin() {
+  const email    = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-password').value;
+  try {
+    const res  = await fetch(API_BASE + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Login failed');
+    authToken = data.access_token;
+    localStorage.setItem('trakn_token', authToken);
+    document.getElementById('auth-status').textContent = 'Logged in!';
+    toast('Login successful.');
+  } catch(e) {
+    toast('Login error: ' + e.message);
+  }
+}
+
+async function doRegister() {
+  const email    = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-password').value;
+  try {
+    const res  = await fetch(API_BASE + '/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Registration failed');
+    document.getElementById('auth-status').textContent = 'Registered! Now login.';
+    toast('Registration successful. Please login.');
+  } catch(e) {
+    toast('Register error: ' + e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// API helper
+// ---------------------------------------------------------------------------
+async function apiFetch(path, method = 'GET', body = null) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { 'Authorization': 'Bearer ' + authToken } : {})
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res  = await fetch(API_BASE + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Mouse interaction
+// ---------------------------------------------------------------------------
+function canvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function onMouseDown(e) {
+  const pos = canvasPos(e);
+
+  if (currentTool === 'scale-pick') {
+    scalePoints.push(pos);
+    if (scalePoints.length > 2) scalePoints = [pos];
+    render();
+    return;
+  }
+
+  if (currentTool === 'draw') {
+    wallInProgress = { x1: pos.x, y1: pos.y };
+    return;
+  }
+
+  if (currentTool === 'erase') {
+    eraseWallAt(pos.x, pos.y);
+    return;
+  }
+
+  if (currentTool === 'pan') {
+    panStart = pos;
+    return;
+  }
+}
+
+function onMouseMove(e) {
+  const pos = canvasPos(e);
+  setStatus(`x:${pos.x.toFixed(0)}, y:${pos.y.toFixed(0)}` +
+            (scaleCalibrated ? ` | ${(pos.x/floorplanScale).toFixed(2)}m, ${(pos.y/floorplanScale).toFixed(2)}m` : ''));
+
+  if (wallInProgress) {
+    render();
+    ctx.save();
+    ctx.strokeStyle = '#ff6644';
+    ctx.lineWidth   = 2;
+    ctx.beginPath();
+    ctx.moveTo(wallInProgress.x1, wallInProgress.y1);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (panStart) {
+    panOffset.x += pos.x - panStart.x;
+    panOffset.y += pos.y - panStart.y;
+    panStart = pos;
+    render();
+  }
+}
+
+function onMouseUp(e) {
+  if (wallInProgress) {
+    const pos = canvasPos(e);
+    const dx  = pos.x - wallInProgress.x1;
+    const dy  = pos.y - wallInProgress.y1;
+    if (Math.sqrt(dx*dx + dy*dy) > 5) {
+      walls.push({ x1: wallInProgress.x1, y1: wallInProgress.y1, x2: pos.x, y2: pos.y });
+      document.getElementById('wall-count').textContent = `Walls: ${walls.length}`;
+    }
+    wallInProgress = null;
+    render();
+  }
+  panStart = null;
+}
+
+function eraseWallAt(px, py) {
+  walls = walls.filter(w => {
+    const d = pointToSegmentDist(px, py, w.x1, w.y1, w.x2, w.y2);
+    return d > 8;
+  });
+  document.getElementById('wall-count').textContent = `Walls: ${walls.length}`;
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Floor plan
+  if (floorplanImg) {
+    ctx.save();
+    ctx.drawImage(floorplanImg, panOffset.x, panOffset.y,
+      floorplanImg.width * floorplanScale, floorplanImg.height * floorplanScale);
+    ctx.restore();
+  }
+
+  // Heatmap overlay
+  if (heatmapData && scaleCalibrated) {
+    renderHeatmapOverlay(heatmapData.ap);
+  }
+
+  // Grid points
+  if (activeTab === 'grid' && gridPoints.length > 0) {
+    ctx.save();
+    for (const gp of gridPoints) {
+      const px = gp.x * floorplanScale + panOffset.x;
+      const py = gp.y * floorplanScale + panOffset.y;
+      ctx.fillStyle = gp.walkable ? 'rgba(100,200,255,0.5)' : 'rgba(255,80,80,0.4)';
+      ctx.fillRect(px - 2, py - 2, 4, 4);
+    }
+    ctx.restore();
+  }
+
+  // Walls
+  ctx.save();
+  ctx.strokeStyle = '#ff9944';
+  ctx.lineWidth   = 2.5;
+  for (const w of walls) {
+    ctx.beginPath();
+    ctx.moveTo(w.x1, w.y1);
+    ctx.lineTo(w.x2, w.y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Scale points
+  ctx.save();
+  ctx.fillStyle   = '#7cffaa';
+  ctx.strokeStyle = '#3aff88';
+  ctx.lineWidth   = 1.5;
+  for (const p of scalePoints) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (scalePoints.length === 2) {
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#7cffaa';
+    ctx.beginPath();
+    ctx.moveTo(scalePoints[0].x, scalePoints[0].y);
+    ctx.lineTo(scalePoints[1].x, scalePoints[1].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+function renderHeatmapOverlay(ap) {
+  const w = canvas.width;
+  const h = canvas.height;
+  const step = Math.max(4, Math.floor(floorplanScale * 0.2));
+
+  for (let px = 0; px < w; px += step) {
+    for (let py = 0; py < h; py += step) {
+      const mx = (px - panOffset.x) / floorplanScale;
+      const my = (py - panOffset.y) / floorplanScale;
+      const dx = mx - (ap.x || 0);
+      const dy = my - (ap.y || 0);
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      const rssi = (ap.rssi_ref || -40) - 10 * (ap.path_loss_n || 2) * Math.log10(Math.max(d, 0.1));
+      const norm = Math.min(1, Math.max(0, (rssi + 90) / 60));  // -90..-30 → 0..1
+      ctx.fillStyle = heatColor(norm);
+      ctx.fillRect(px, py, step, step);
+    }
+  }
+}
+
+function heatColor(t) {
+  // cold=blue → cyan → green → yellow → hot=red
+  const r = t < 0.5 ? Math.floor(255 * t * 2)      : 255;
+  const g = t < 0.5 ? Math.floor(255 * t * 2)      : Math.floor(255 * (1 - t) * 2);
+  const b = t < 0.5 ? 255                           : 0;
+  return `rgba(${r},${g},${b},0.45)`;
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+function setStatus(msg) {
+  document.getElementById('status-bar').textContent = msg;
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+</script>
+</body>
+</html>
