@@ -806,9 +806,10 @@ async def verify_device_ownership(
 
 
 # ---------------------------------------------------------------------------
-# GET /health
+# GET /api/v1/health
+# Proxied by Nginx at /api/v1/* — /health alone is blocked at the reverse proxy.
 # ---------------------------------------------------------------------------
-@app.get("/health")
+@app.get("/api/v1/health")
 async def health():
     return {"status": "ok"}
 

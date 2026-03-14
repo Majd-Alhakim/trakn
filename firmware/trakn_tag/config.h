@@ -65,7 +65,7 @@
 #define API_PORT            443
 #define API_BASE_PATH       "/api/v1"
 #define GATEWAY_ENDPOINT    "/api/v1/gateway/packet"
-#define HEALTH_ENDPOINT     "/health"
+#define HEALTH_ENDPOINT     "/api/v1/health"
 
 // API key for this device (generated as "trakn-hw-" + sha256(mac+salt)[:24])
 #ifndef DEVICE_API_KEY
