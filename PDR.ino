@@ -1,6 +1,8 @@
 	Arduino Code:
 #include <Wire.h>
 
+
+
 // MPU6050 I2C address and register definitions
 #define MPU6050_ADDR 0x68
 #define PWR_MGMT_1 0x6B

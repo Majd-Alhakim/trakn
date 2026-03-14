@@ -1,6 +1,7 @@
 function PDR_matlab
 % PDR system with SVR stride estimation using log-binned histogram features
 
+
 %% User Settings
 port         = "COM4";
 baud         = 115200;

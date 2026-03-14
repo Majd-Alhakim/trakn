@@ -53,11 +53,11 @@
 // WiFi / Network
 // -----------------------------------------------------------------------------
 #ifndef WIFI_SSID
-#define WIFI_SSID           "YourNetworkSSID"
+#define WIFI_SSID           "Alhakim"
 #endif
 
 #ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD       "YourNetworkPassword"
+#define WIFI_PASSWORD       "sham@2014"
 #endif
 
 // API server

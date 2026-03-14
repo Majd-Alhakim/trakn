@@ -4,7 +4,6 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 
 import '../services/auth_service.dart';
 import '../screens/link_tag_screen.dart';
@@ -43,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result != null) {
       setState(() {
         _children.add(LinkedChild(
-          mac:       result['mac'] as String,
+          mac: result['mac'] as String,
           childName: result['child_name'] as String,
         ));
       });
@@ -54,8 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MapScreen(
-          deviceMac:  child.mac,
-          childName:  child.childName,
+          deviceMac: child.mac,
+          childName: child.childName,
           authService: widget.authService,
         ),
       ),
@@ -75,7 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFF0F1117),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1D27),
-        title: const Text('TRAKN', style: TextStyle(color: Color(0xFF7C9CFF), fontSize: 18)),
+        title: const Text('TRAKN',
+            style: TextStyle(color: Color(0xFF7C9CFF), fontSize: 18)),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Color(0xFF7C9CFF)),
@@ -89,7 +89,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.child_care, color: Color(0xFF3A4060), size: 80),
+                  const Icon(Icons.child_care,
+                      color: Color(0xFF3A4060), size: 80),
                   const SizedBox(height: 16),
                   const Text(
                     'No children linked yet.',
@@ -122,13 +123,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     title: Text(
                       child.childName,
-                      style: const TextStyle(color: Color(0xFFE0E0E0), fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          color: Color(0xFFE0E0E0),
+                          fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
                       child.mac,
-                      style: const TextStyle(color: Color(0xFF6677AA), fontSize: 11),
+                      style: const TextStyle(
+                          color: Color(0xFF6677AA), fontSize: 11),
                     ),
-                    trailing: const Icon(Icons.chevron_right, color: Color(0xFF4455AA)),
+                    trailing: const Icon(Icons.chevron_right,
+                        color: Color(0xFF4455AA)),
                     onTap: () => _openMap(child),
                   ),
                 );
