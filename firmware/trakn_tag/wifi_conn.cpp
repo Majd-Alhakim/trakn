@@ -15,8 +15,8 @@ static unsigned long _lastReconnectAttempt = 0;
 // Blocks until connected or WIFI_MAX_RETRIES exhausted.
 // ---------------------------------------------------------------------------
 bool wifiConnect(const char* ssid, const char* password) {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
+    // Ameba WiFiClass::begin() takes char* (not const char*)
+    WiFi.begin(const_cast<char*>(ssid), password);
 
     for (int attempt = 0; attempt < WIFI_MAX_RETRIES; attempt++) {
         if (WiFi.status() == WL_CONNECTED) {
@@ -46,5 +46,5 @@ void wifiReconnectIfNeeded(const char* ssid, const char* password) {
 
     _lastReconnectAttempt = now;
     WiFi.disconnect();
-    WiFi.begin(ssid, password);
+    WiFi.begin(const_cast<char*>(ssid), password);
 }

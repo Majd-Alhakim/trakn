@@ -6,8 +6,7 @@
 
 #include <Wire.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
+#include <WiFiSSLClient.h>
 #include <Arduino.h>
 
 #include "config.h"
@@ -85,20 +84,27 @@ static void buildJson(char* buf, size_t bufLen) {
 // GET /health — block until response or timeout.
 // ---------------------------------------------------------------------------
 static void healthCheck() {
-    WiFiClientSecure tlsClient;
-    tlsClient.setInsecure();
+    WiFiSSLClient client;
+    if (!client.connect(API_HOST, API_PORT)) return;
 
-    HTTPClient http;
-    String url = String("https://") + API_HOST + ":" + API_PORT + HEALTH_ENDPOINT;
-    if (!http.begin(tlsClient, url)) return;
+    client.print(
+        String("GET ") + HEALTH_ENDPOINT + " HTTP/1.1\r\n" +
+        "Host: " + API_HOST + "\r\n" +
+        "Connection: close\r\n\r\n"
+    );
 
-    int code = http.GET();
+    String statusLine = client.readStringUntil('\n');
+    client.stop();
+
+    int spaceIdx = statusLine.indexOf(' ');
+    int code = (spaceIdx >= 0) ? statusLine.substring(spaceIdx + 1, spaceIdx + 4).toInt() : 0;
+
     if (code == 200) {
         Serial.println("[TRAKN] Health check OK");
     } else {
-        Serial.printf("[TRAKN] Health check failed: %d\n", code);
+        Serial.print("[TRAKN] Health check failed: ");
+        Serial.println(code);
     }
-    http.end();
 }
 
 // ---------------------------------------------------------------------------
@@ -121,12 +127,16 @@ void setup() {
     Serial.println("[TRAKN] MPU6050 initialized.");
 
     // Connect to WiFi
-    Serial.printf("[TRAKN] Connecting to SSID: %s\n", WIFI_SSID);
+    Serial.print("[TRAKN] Connecting to SSID: ");
+    Serial.println(WIFI_SSID);
     if (!wifiConnect(WIFI_SSID, WIFI_PASSWORD)) {
         Serial.println("[TRAKN] WARNING: WiFi connect failed at startup.");
     } else {
-        Serial.printf("[TRAKN] WiFi connected. IP: %s\n",
-                      WiFi.localIP().toString().c_str());
+        IPAddress ip = WiFi.localIP();
+        char ipStr[16];
+        snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+        Serial.print("[TRAKN] WiFi connected. IP: ");
+        Serial.println(ipStr);
     }
 
     // Health check

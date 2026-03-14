@@ -1,93 +1,83 @@
 // =============================================================================
 // TRAKN Tag — wifi_scanner.cpp
-// Non-blocking WiFi AP scanner implementation.
+// WiFi AP scanner implementation for Ameba RTL8720DN (BW16).
+//
+// Ameba's WiFiClass only supports synchronous scanning:
+//   - scanNetworks()    → blocks until done, returns AP count
+//   - SSID(i)           → char* (not String)
+//   - BSSID(i)          → uint8_t* (6 bytes, not a string)
+//   - RSSI(i)           → int32_t
+// There is no async scan, scanComplete(), scanDelete(), BSSIDstr(),
+// or channel() on this SDK.
 // =============================================================================
 
 #include "wifi_scanner.h"
 #include "config.h"
 #include <WiFi.h>
 
-static bool _scanInProgress = false;
-static bool _scanReady      = false;
+static bool    _scanReady = false;
+static int16_t _scanTotal = 0;
 
 // ---------------------------------------------------------------------------
 // wifiScanTrigger
-// Initiates an asynchronous scan (WIFI_SCAN_RUNNING is returned immediately).
+// Runs a synchronous scan and caches the result count.
+// Blocks for a few hundred ms — call only from the main loop when acceptable.
 // ---------------------------------------------------------------------------
 void wifiScanTrigger() {
-    if (_scanInProgress) return;
-    // WiFi.scanNetworks(async=true)
-    WiFi.scanNetworks(true);
-    _scanInProgress = true;
-    _scanReady      = false;
+    _scanReady = false;
+    _scanTotal = WiFi.scanNetworks();   // synchronous; returns AP count or -1
+    if (_scanTotal < 0) _scanTotal = 0;
+    _scanReady = true;
 }
 
 // ---------------------------------------------------------------------------
 // wifiScanComplete
-// Poll the scan engine; returns true once results are available.
+// Returns true when scan results are available.
 // ---------------------------------------------------------------------------
 bool wifiScanComplete() {
-    if (!_scanInProgress) return false;
-    if (_scanReady) return true;
-
-    int16_t n = WiFi.scanComplete();
-    if (n == WIFI_SCAN_RUNNING) return false;   // still in progress
-    if (n == WIFI_SCAN_FAILED)  {
-        _scanInProgress = false;
-        return false;
-    }
-    // n >= 0: results ready
-    _scanReady      = true;
-    _scanInProgress = false;
-    return true;
+    return _scanReady;
 }
 
 // ---------------------------------------------------------------------------
 // wifiCollectResults
-// Sort and return the top MAX_SCAN_RESULTS APs by RSSI.
+// Copies the top MAX_SCAN_RESULTS APs (by RSSI) into results[].
 // ---------------------------------------------------------------------------
 void wifiCollectResults(WifiEntry results[MAX_SCAN_RESULTS], int& count) {
     count = 0;
-    if (!_scanReady) return;
-
-    int16_t total = WiFi.scanComplete();
-    if (total <= 0) {
+    if (!_scanReady || _scanTotal <= 0) {
         _scanReady = false;
-        WiFi.scanDelete();
         return;
     }
 
-    // Build a list of (rssi, index) pairs and pick top MAX_SCAN_RESULTS.
-    // Simple selection sort is fine for small N.
-    int16_t indices[MAX_SCAN_RESULTS];
-    int     kept = 0;
+    int16_t total = _scanTotal;
 
+    // Build index array for sorting; cap at MAX_SCAN_RESULTS first pass.
+    int16_t indices[MAX_SCAN_RESULTS];
+    int kept = 0;
     for (int16_t i = 0; i < total && kept < MAX_SCAN_RESULTS; i++) {
         indices[kept++] = i;
     }
 
-    // Sort kept entries by RSSI descending (bubble sort — tiny N).
+    // Bubble-sort kept entries descending by RSSI.
     for (int a = 0; a < kept - 1; a++) {
         for (int b = a + 1; b < kept; b++) {
             if (WiFi.RSSI(indices[b]) > WiFi.RSSI(indices[a])) {
-                int16_t tmp  = indices[a];
-                indices[a]   = indices[b];
-                indices[b]   = tmp;
+                int16_t tmp = indices[a];
+                indices[a]  = indices[b];
+                indices[b]  = tmp;
             }
         }
     }
 
-    // Also check remaining entries to see if any beat the weakest kept entry.
+    // Check remaining entries against the weakest kept.
     for (int16_t i = MAX_SCAN_RESULTS; i < total; i++) {
         int32_t r = WiFi.RSSI(i);
-        // Find the weakest entry in kept.
         int weakIdx = 0;
         for (int k = 1; k < kept; k++) {
             if (WiFi.RSSI(indices[k]) < WiFi.RSSI(indices[weakIdx])) weakIdx = k;
         }
         if (r > WiFi.RSSI(indices[weakIdx])) {
             indices[weakIdx] = i;
-            // Re-sort.
             for (int a = 0; a < kept - 1; a++) {
                 for (int b = a + 1; b < kept; b++) {
                     if (WiFi.RSSI(indices[b]) > WiFi.RSSI(indices[a])) {
@@ -102,17 +92,23 @@ void wifiCollectResults(WifiEntry results[MAX_SCAN_RESULTS], int& count) {
 
     for (int k = 0; k < kept; k++) {
         int16_t idx = indices[k];
-        strncpy(results[k].bssid, WiFi.BSSIDstr(idx).c_str(), 17);
-        results[k].bssid[17] = '\0';
-        strncpy(results[k].ssid, WiFi.SSID(idx).c_str(), 32);
-        results[k].ssid[32]  = '\0';
+
+        // SSID — Ameba returns char*, not String
+        strncpy(results[k].ssid, WiFi.SSID(idx), 32);
+        results[k].ssid[32] = '\0';
+
+        // BSSID — Ameba returns uint8_t[6]; format manually
+        uint8_t* mac = WiFi.BSSID(idx);
+        snprintf(results[k].bssid, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
         results[k].rssi = WiFi.RSSI(idx);
-        results[k].freq = WiFi.channel(idx) <= 14
-                          ? 2407 + WiFi.channel(idx) * 5
-                          : 5000 + WiFi.channel(idx) * 5;
+
+        // Ameba does not expose channel; set freq to 0.
+        results[k].freq = 0;
     }
     count = kept;
 
     _scanReady = false;
-    WiFi.scanDelete();
+    _scanTotal = 0;
 }
